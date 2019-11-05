@@ -20,6 +20,7 @@ import (
 	"net"
 	"strconv"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	componentbaseconfigv1alpha1 "k8s.io/component-base/config/v1alpha1"
 	kubeschedulerconfigv1alpha1 "k8s.io/kube-scheduler/config/v1alpha1"
@@ -29,6 +30,19 @@ import (
 	"k8s.io/kubernetes/pkg/master/ports"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config"
 )
+
+var defaultTopologySpreadConstraints = []corev1.TopologySpreadConstraint{
+	{
+		MaxSkew:           1,
+		TopologyKey:       corev1.LabelHostname,
+		WhenUnsatisfiable: corev1.ScheduleAnyway,
+	},
+	{
+		MaxSkew:           1,
+		TopologyKey:       corev1.LabelZoneFailureDomainStable,
+		WhenUnsatisfiable: corev1.ScheduleAnyway,
+	},
+}
 
 func addDefaultingFuncs(scheme *runtime.Scheme) error {
 	return RegisterDefaults(scheme)
@@ -55,6 +69,13 @@ func SetDefaults_KubeSchedulerConfiguration(obj *kubeschedulerconfigv1alpha1.Kub
 	if policy := obj.AlgorithmSource.Policy; policy != nil {
 		if policy.ConfigMap != nil && len(policy.ConfigMap.Namespace) == 0 {
 			obj.AlgorithmSource.Policy.ConfigMap.Namespace = api.NamespaceSystem
+		}
+	}
+
+	if len(obj.TopologySpreadConstraints) == 0 {
+		obj.TopologySpreadConstraints = make([]corev1.TopologySpreadConstraint, len(defaultTopologySpreadConstraints))
+		for i := range defaultTopologySpreadConstraints {
+			obj.TopologySpreadConstraints[i] = *defaultTopologySpreadConstraints[i].DeepCopy()
 		}
 	}
 
