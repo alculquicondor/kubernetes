@@ -1955,6 +1955,7 @@ func TestInterPodAffinityPriority(t *testing.T) {
 				informerFactory.Apps().V1().ReplicaSets().Lister(),
 				informerFactory.Apps().V1().StatefulSets().Lister(),
 				1,
+				nil,
 			)
 
 			metaData := metaDataProducer(test.pod, test.nodes, snapshot)
@@ -2070,6 +2071,7 @@ func TestHardPodAffinitySymmetricWeight(t *testing.T) {
 				informerFactory.Apps().V1().ReplicaSets().Lister(),
 				informerFactory.Apps().V1().StatefulSets().Lister(),
 				test.hardPodAffinityWeight,
+				nil,
 			)
 
 			metaData := metaDataProducer(test.pod, test.nodes, snapshot)

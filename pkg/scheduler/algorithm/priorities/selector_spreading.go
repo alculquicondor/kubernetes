@@ -26,6 +26,7 @@ import (
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
 	schedulerlisters "k8s.io/kubernetes/pkg/scheduler/listers"
 	schedulernodeinfo "k8s.io/kubernetes/pkg/scheduler/nodeinfo"
+	"k8s.io/kubernetes/pkg/scheduler/util"
 	utilnode "k8s.io/kubernetes/pkg/util/node"
 
 	"k8s.io/klog"
@@ -76,7 +77,7 @@ func (s *SelectorSpread) CalculateSpreadPriorityMap(pod *v1.Pod, meta interface{
 	if ok {
 		selector = priorityMeta.podSelector
 	} else {
-		selector = getSelector(pod, s.serviceLister, s.controllerLister, s.replicaSetLister, s.statefulSetLister)
+		selector = util.GetSelector(pod, s.serviceLister, s.controllerLister, s.replicaSetLister, s.statefulSetLister)
 	}
 
 	count := countMatchingPods(pod.Namespace, selector, nodeInfo)

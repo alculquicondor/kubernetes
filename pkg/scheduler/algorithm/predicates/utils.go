@@ -21,9 +21,12 @@ import (
 
 	"k8s.io/api/core/v1"
 	storagev1beta1 "k8s.io/api/storage/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	appslisters "k8s.io/client-go/listers/apps/v1"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	csilibplugins "k8s.io/csi-translation-lib/plugins"
 	"k8s.io/kubernetes/pkg/features"
 	schedulernodeinfo "k8s.io/kubernetes/pkg/scheduler/nodeinfo"
@@ -146,4 +149,50 @@ func isCSIMigrationOn(csiNode *storagev1beta1.CSINode, pluginName string) bool {
 	}
 
 	return mpaSet.Has(pluginName)
+}
+
+// GetSelector returns a selector for the services, RCs, RSs, and SSs matching the given pod.
+func GetSelector(pod *v1.Pod, sl corelisters.ServiceLister, cl corelisters.ReplicationControllerLister, rsl appslisters.ReplicaSetLister, ssl appslisters.StatefulSetLister) labels.Selector {
+	labelSet := make(labels.Set)
+	// Since services, RCs, RSs and SSs match the pod, they won't have conflicting
+	// labels. Merging is safe.
+
+	if services, err := sl.GetPodServices(pod); err == nil {
+		for _, service := range services {
+			labelSet = labels.Merge(labelSet, service.Spec.Selector)
+		}
+	}
+
+	if rcs, err := cl.GetPodControllers(pod); err == nil {
+		for _, rc := range rcs {
+			labelSet = labels.Merge(labelSet, rc.Spec.Selector)
+		}
+	}
+
+	selector := labels.NewSelector()
+	if len(labelSet) != 0 {
+		selector = labelSet.AsSelector()
+	}
+
+	if rss, err := rsl.GetPodReplicaSets(pod); err == nil {
+		for _, rs := range rss {
+			if other, err := metav1.LabelSelectorAsSelector(rs.Spec.Selector); err == nil {
+				if r, ok := other.Requirements(); ok {
+					selector = selector.Add(r...)
+				}
+			}
+		}
+	}
+
+	if sss, err := ssl.GetPodStatefulSets(pod); err == nil {
+		for _, ss := range sss {
+			if other, err := metav1.LabelSelectorAsSelector(ss.Spec.Selector); err == nil {
+				if r, ok := other.Requirements(); ok {
+					selector = selector.Add(r...)
+				}
+			}
+		}
+	}
+
+	return selector
 }

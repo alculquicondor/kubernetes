@@ -22,17 +22,19 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	appslisters "k8s.io/client-go/listers/apps/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
+	"k8s.io/kubernetes/pkg/scheduler/algorithm/predicates"
 	schedulerlisters "k8s.io/kubernetes/pkg/scheduler/listers"
 	schedulernodeinfo "k8s.io/kubernetes/pkg/scheduler/nodeinfo"
 )
 
-// MetadataFactory is a factory to produce PriorityMetadata.
+// MetadataFactory is a factory to produce priority Metadata.
 type MetadataFactory struct {
-	serviceLister         corelisters.ServiceLister
-	controllerLister      corelisters.ReplicationControllerLister
-	replicaSetLister      appslisters.ReplicaSetLister
-	statefulSetLister     appslisters.StatefulSetLister
-	hardPodAffinityWeight int32
+	serviceLister             corelisters.ServiceLister
+	controllerLister          corelisters.ReplicationControllerLister
+	replicaSetLister          appslisters.ReplicaSetLister
+	statefulSetLister         appslisters.StatefulSetLister
+	hardPodAffinityWeight     int32
+	topologySpreadConstraints []v1.TopologySpreadConstraint
 }
 
 // NewMetadataFactory creates a MetadataFactory.
@@ -42,13 +44,15 @@ func NewMetadataFactory(
 	replicaSetLister appslisters.ReplicaSetLister,
 	statefulSetLister appslisters.StatefulSetLister,
 	hardPodAffinityWeight int32,
+	topologySpreadConstraints []v1.TopologySpreadConstraint,
 ) MetadataProducer {
 	factory := &MetadataFactory{
-		serviceLister:         serviceLister,
-		controllerLister:      controllerLister,
-		replicaSetLister:      replicaSetLister,
-		statefulSetLister:     statefulSetLister,
-		hardPodAffinityWeight: hardPodAffinityWeight,
+		serviceLister:             serviceLister,
+		controllerLister:          controllerLister,
+		replicaSetLister:          replicaSetLister,
+		statefulSetLister:         statefulSetLister,
+		hardPodAffinityWeight:     hardPodAffinityWeight,
+		topologySpreadConstraints: topologySpreadConstraints,
 	}
 	return factory.PriorityMetadata
 }
@@ -88,7 +92,7 @@ func (pmf *MetadataFactory) PriorityMetadata(
 		podLimits:               getResourceLimits(pod),
 		podTolerations:          getAllTolerationPreferNoSchedule(pod.Spec.Tolerations),
 		affinity:                pod.Spec.Affinity,
-		podSelector:             getSelector(pod, pmf.serviceLister, pmf.controllerLister, pmf.replicaSetLister, pmf.statefulSetLister),
+		podSelector:             predicates.GetSelector(pod, pmf.serviceLister, pmf.controllerLister, pmf.replicaSetLister, pmf.statefulSetLister),
 		controllerRef:           metav1.GetControllerOf(pod),
 		podFirstServiceSelector: getFirstServiceSelector(pod, pmf.serviceLister),
 		totalNumNodes:           totalNumNodes,
@@ -103,50 +107,4 @@ func getFirstServiceSelector(pod *v1.Pod, sl corelisters.ServiceLister) (firstSe
 		return labels.SelectorFromSet(services[0].Spec.Selector)
 	}
 	return nil
-}
-
-// getSelector returns a selector for the services, RCs, RSs, and SSs matching the given pod.
-func getSelector(pod *v1.Pod, sl corelisters.ServiceLister, cl corelisters.ReplicationControllerLister, rsl appslisters.ReplicaSetLister, ssl appslisters.StatefulSetLister) labels.Selector {
-	labelSet := make(labels.Set)
-	// Since services, RCs, RSs and SSs match the pod, they won't have conflicting
-	// labels. Merging is safe.
-
-	if services, err := sl.GetPodServices(pod); err == nil {
-		for _, service := range services {
-			labelSet = labels.Merge(labelSet, service.Spec.Selector)
-		}
-	}
-
-	if rcs, err := cl.GetPodControllers(pod); err == nil {
-		for _, rc := range rcs {
-			labelSet = labels.Merge(labelSet, rc.Spec.Selector)
-		}
-	}
-
-	selector := labels.NewSelector()
-	if len(labelSet) != 0 {
-		selector = labelSet.AsSelector()
-	}
-
-	if rss, err := rsl.GetPodReplicaSets(pod); err == nil {
-		for _, rs := range rss {
-			if other, err := metav1.LabelSelectorAsSelector(rs.Spec.Selector); err == nil {
-				if r, ok := other.Requirements(); ok {
-					selector = selector.Add(r...)
-				}
-			}
-		}
-	}
-
-	if sss, err := ssl.GetPodStatefulSets(pod); err == nil {
-		for _, ss := range sss {
-			if other, err := metav1.LabelSelectorAsSelector(ss.Spec.Selector); err == nil {
-				if r, ok := other.Requirements(); ok {
-					selector = selector.Add(r...)
-				}
-			}
-		}
-	}
-
-	return selector
 }

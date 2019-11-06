@@ -1646,7 +1646,7 @@ func EvenPodsSpreadPredicate(pod *v1.Pod, meta Metadata, nodeInfo *schedulernode
 	if node == nil {
 		return false, nil, fmt.Errorf("node not found")
 	}
-	constraints := getHardTopologySpreadConstraints(pod)
+	constraints := filterHardTopologySpreadConstraints(pod.Spec.TopologySpreadConstraints)
 	if len(constraints) == 0 {
 		return true, nil, nil
 	}
@@ -1665,19 +1665,15 @@ func EvenPodsSpreadPredicate(pod *v1.Pod, meta Metadata, nodeInfo *schedulernode
 
 	podLabelSet := labels.Set(pod.Labels)
 	for _, constraint := range constraints {
-		tpKey := constraint.TopologyKey
-		tpVal, ok := node.Labels[constraint.TopologyKey]
+		tpKey := constraint.topologyKey
+		tpVal, ok := node.Labels[constraint.topologyKey]
 		if !ok {
 			klog.V(5).Infof("node '%s' doesn't have required label '%s'", node.Name, tpKey)
 			return false, []PredicateFailureReason{ErrTopologySpreadConstraintsNotMatch}, nil
 		}
 
-		selfMatch, err := PodMatchesSpreadConstraint(podLabelSet, constraint)
-		if err != nil {
-			return false, nil, err
-		}
-		selfMatchNum := int32(0)
-		if selfMatch {
+		selfMatchNum := 0
+		if constraint.selector.Matches(podLabelSet) {
 			selfMatchNum = 1
 		}
 
@@ -1693,7 +1689,7 @@ func EvenPodsSpreadPredicate(pod *v1.Pod, meta Metadata, nodeInfo *schedulernode
 		minMatchNum := paths[0].matchNum
 		matchNum := evenPodsSpreadMetadata.tpPairToMatchNum[pair]
 		skew := matchNum + selfMatchNum - minMatchNum
-		if skew > constraint.MaxSkew {
+		if skew > constraint.maxSkew {
 			klog.V(5).Infof("node '%s' failed spreadConstraint[%s]: matchNum(%d) + selfMatchNum(%d) - minMatchNum(%d) > maxSkew(%d)", node.Name, tpKey, matchNum, selfMatchNum, minMatchNum, constraint.MaxSkew)
 			return false, []PredicateFailureReason{ErrTopologySpreadConstraintsNotMatch}, nil
 		}

@@ -28,11 +28,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/util/sets"
+	appslisters "k8s.io/client-go/listers/apps/v1"
+	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/util/workqueue"
 	priorityutil "k8s.io/kubernetes/pkg/scheduler/algorithm/priorities/util"
 	schedulerlisters "k8s.io/kubernetes/pkg/scheduler/listers"
 	schedulernodeinfo "k8s.io/kubernetes/pkg/scheduler/nodeinfo"
-	schedutil "k8s.io/kubernetes/pkg/scheduler/util"
+	"k8s.io/kubernetes/pkg/scheduler/util"
 )
 
 // Metadata interface represents anything that can access a predicate metadata.
@@ -116,6 +118,7 @@ func (paths *criticalPaths) update(tpVal string, num int32) {
 // (1) critical paths where the least pods are matched on each spread constraint.
 // (2) number of pods matched on each spread constraint.
 type evenPodsSpreadMetadata struct {
+	constraints []topologySpreadConstraint
 	// We record 2 critical paths instead of all critical paths here.
 	// criticalPaths[0].matchNum always holds the minimum matching number.
 	// criticalPaths[1].matchNum is always greater or equal to criticalPaths[0].matchNum, but
@@ -123,6 +126,12 @@ type evenPodsSpreadMetadata struct {
 	tpKeyToCriticalPaths map[string]*criticalPaths
 	// tpPairToMatchNum is keyed with topologyPair, and valued with the number of matching pods.
 	tpPairToMatchNum map[topologyPair]int32
+}
+
+type topologySpreadConstraint struct {
+	maxSkew     int
+	topologyKey string
+	selector    labels.Selector
 }
 
 type serviceAffinityMetadata struct {
@@ -144,7 +153,7 @@ func (m *serviceAffinityMetadata) addPod(addedPod *v1.Pod, pod *v1.Pod, node *v1
 }
 
 func (m *serviceAffinityMetadata) removePod(deletedPod *v1.Pod, node *v1.Node) {
-	deletedPodFullName := schedutil.GetPodFullName(deletedPod)
+	deletedPodFullName := util.GetPodFullName(deletedPod)
 
 	if m == nil ||
 		len(m.matchingPodList) == 0 ||
@@ -153,7 +162,7 @@ func (m *serviceAffinityMetadata) removePod(deletedPod *v1.Pod, node *v1.Node) {
 	}
 
 	for i, pod := range m.matchingPodList {
-		if schedutil.GetPodFullName(pod) == deletedPodFullName {
+		if util.GetPodFullName(pod) == deletedPodFullName {
 			m.matchingPodList = append(m.matchingPodList[:i], m.matchingPodList[i+1:]...)
 			break
 		}
@@ -331,7 +340,13 @@ func RegisterPredicateMetadataProducerWithExtendedResourceOptions(ignoredExtende
 }
 
 // MetadataProducerFactory is a factory to produce Metadata.
-type MetadataProducerFactory struct{}
+type MetadataProducerFactory struct {
+	ServiceLister             corelisters.ServiceLister
+	ControllerLister          corelisters.ReplicationControllerLister
+	ReplicaSetLister          appslisters.ReplicaSetLister
+	StatefulSetLister         appslisters.StatefulSetLister
+	TopologySpreadConstraints []v1.TopologySpreadConstraint
+}
 
 // GetPredicateMetadata returns the predicateMetadata which will be used by various predicates.
 func (f *MetadataProducerFactory) GetPredicateMetadata(pod *v1.Pod, sharedLister schedulerlisters.SharedLister) Metadata {
@@ -359,7 +374,7 @@ func (f *MetadataProducerFactory) GetPredicateMetadata(pod *v1.Pod, sharedLister
 
 	// evenPodsSpreadMetadata represents how existing pods match "pod"
 	// on its spread constraints
-	evenPodsSpreadMetadata, err := getEvenPodsSpreadMetadata(pod, allNodes)
+	evenPodsSpreadMetadata, err := f.getEvenPodsSpreadMetadata(pod, allNodes)
 	if err != nil {
 		klog.Errorf("Error calculating spreadConstraintsMap: %v", err)
 		return nil
@@ -387,7 +402,7 @@ func (f *MetadataProducerFactory) GetPredicateMetadata(pod *v1.Pod, sharedLister
 
 func getPodFitsHostPortsMetadata(pod *v1.Pod) *podFitsHostPortsMetadata {
 	return &podFitsHostPortsMetadata{
-		podPorts: schedutil.GetContainerPorts(pod),
+		podPorts: util.GetContainerPorts(pod),
 	}
 }
 
@@ -417,20 +432,37 @@ func getPodAffinityMetadata(pod *v1.Pod, allNodes []*schedulernodeinfo.NodeInfo,
 	}, nil
 }
 
-func getEvenPodsSpreadMetadata(pod *v1.Pod, allNodes []*schedulernodeinfo.NodeInfo) (*evenPodsSpreadMetadata, error) {
-	// We have feature gating in APIServer to strip the spec
-	// so don't need to re-check feature gate, just check length of constraints.
-	constraints := getHardTopologySpreadConstraints(pod)
+func (f *MetadataProducerFactory) getEvenPodsSpreadMetadata(pod *v1.Pod, allNodes []*schedulernodeinfo.NodeInfo) (*evenPodsSpreadMetadata, error) {
+	var constraints []topologySpreadConstraint
+	var err error
+	if len(pod.Spec.TopologySpreadConstraints) == 0 {
+		constraints, err = filterHardTopologySpreadConstraints(f.TopologySpreadConstraints)
+		if err != nil {
+			return nil, err
+		}
+		selector := GetSelector(pod, f.ServiceLister, f.ControllerLister, f.ReplicaSetLister, f.StatefulSetLister)
+		for i := range constraints {
+			constraints[i].selector = selector
+		}
+	} else {
+		// We have feature gating in APIServer to strip the spec
+		// so don't need to re-check feature gate, just check length of constraints.
+		constraints, err = filterHardTopologySpreadConstraints(pod.Spec.TopologySpreadConstraints)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if len(constraints) == 0 {
 		return nil, nil
 	}
 
-	errCh := schedutil.NewErrorChannel()
+	errCh := util.NewErrorChannel()
 	var lock sync.Mutex
 
 	// TODO(Huang-Wei): It might be possible to use "make(map[topologyPair]*int32)".
 	// In that case, need to consider how to init each tpPairToCount[pair] in an atomic fashion.
 	m := evenPodsSpreadMetadata{
+		constraints:          constraints,
 		tpKeyToCriticalPaths: make(map[string]*criticalPaths, len(constraints)),
 		tpPairToMatchNum:     make(map[topologyPair]int32),
 	}
@@ -466,16 +498,11 @@ func getEvenPodsSpreadMetadata(pod *v1.Pod, allNodes []*schedulernodeinfo.NodeIn
 				if existingPod.Namespace != pod.Namespace {
 					continue
 				}
-				ok, err := PodMatchesSpreadConstraint(existingPod.Labels, constraint)
-				if err != nil {
-					errCh.SendErrorWithCancel(err, cancel)
-					return
-				}
-				if ok {
+				if constraint.selector.Matches(labels.Set(existingPod.Labels)) {
 					matchTotal++
 				}
 			}
-			pair := topologyPair{key: constraint.TopologyKey, value: node.Labels[constraint.TopologyKey]}
+			pair := topologyPair{key: constraint.topologyKey, value: node.Labels[constraint.topologyKey]}
 			addTopologyPairMatchNum(pair, matchTotal)
 		}
 	}
@@ -487,7 +514,7 @@ func getEvenPodsSpreadMetadata(pod *v1.Pod, allNodes []*schedulernodeinfo.NodeIn
 
 	// calculate min match for each topology pair
 	for i := 0; i < len(constraints); i++ {
-		key := constraints[i].TopologyKey
+		key := constraints[i].topologyKey
 		m.tpKeyToCriticalPaths[key] = newCriticalPaths()
 	}
 	for pair, num := range m.tpPairToMatchNum {
@@ -497,23 +524,30 @@ func getEvenPodsSpreadMetadata(pod *v1.Pod, allNodes []*schedulernodeinfo.NodeIn
 	return &m, nil
 }
 
-func getHardTopologySpreadConstraints(pod *v1.Pod) (constraints []v1.TopologySpreadConstraint) {
-	if pod != nil {
-		for _, constraint := range pod.Spec.TopologySpreadConstraints {
-			if constraint.WhenUnsatisfiable == v1.DoNotSchedule {
-				constraints = append(constraints, constraint)
+func filterHardTopologySpreadConstraints(constraints []v1.TopologySpreadConstraint) ([]topologySpreadConstraint, error) {
+	var r []topologySpreadConstraint
+	for _, c := range constraints {
+		if c.WhenUnsatisfiable == v1.DoNotSchedule {
+			selector, err := metav1.LabelSelectorAsSelector(c.LabelSelector)
+			if err != nil {
+				return nil, err
 			}
+			r = append(r, topologySpreadConstraint{
+				maxSkew:     int(c.MaxSkew),
+				topologyKey: c.TopologyKey,
+				selector:    selector,
+			})
 		}
 	}
-	return
+	return r, nil
 }
 
 // PodMatchesSpreadConstraint verifies if <constraint.LabelSelector> matches <podLabelSet>.
 // Some corner cases:
 // 1. podLabelSet = nil => returns (false, nil)
 // 2. constraint.LabelSelector = nil => returns (false, nil)
-func PodMatchesSpreadConstraint(podLabelSet labels.Set, constraint v1.TopologySpreadConstraint) (bool, error) {
-	selector, err := metav1.LabelSelectorAsSelector(constraint.LabelSelector)
+func PodMatchesSpreadConstraint(podLabelSet labels.Set, constraint topologySpreadConstraint) (bool, error) {
+	selector, err := metav1.LabelSelectorAsSelector(constraint.sl)
 	if err != nil {
 		return false, err
 	}
@@ -524,7 +558,7 @@ func PodMatchesSpreadConstraint(podLabelSet labels.Set, constraint v1.TopologySp
 }
 
 // NodeLabelsMatchSpreadConstraints checks if ALL topology keys in spread constraints are present in node labels.
-func NodeLabelsMatchSpreadConstraints(nodeLabels map[string]string, constraints []v1.TopologySpreadConstraint) bool {
+func NodeLabelsMatchSpreadConstraints(nodeLabels map[string]string, constraints []topologySpreadConstraint) bool {
 	for _, constraint := range constraints {
 		if _, ok := nodeLabels[constraint.TopologyKey]; !ok {
 			return false
@@ -542,7 +576,7 @@ func newTopologyPairsMaps() *topologyPairsMaps {
 }
 
 func (m *topologyPairsMaps) addTopologyPair(pair topologyPair, pod *v1.Pod) {
-	podFullName := schedutil.GetPodFullName(pod)
+	podFullName := util.GetPodFullName(pod)
 	if m.topologyPairToPods[pair] == nil {
 		m.topologyPairToPods[pair] = make(map[*v1.Pod]struct{})
 	}
@@ -554,7 +588,7 @@ func (m *topologyPairsMaps) addTopologyPair(pair topologyPair, pod *v1.Pod) {
 }
 
 func (m *topologyPairsMaps) removePod(deletedPod *v1.Pod) {
-	deletedPodFullName := schedutil.GetPodFullName(deletedPod)
+	deletedPodFullName := util.GetPodFullName(deletedPod)
 	for pair := range m.podToTopologyPairs[deletedPodFullName] {
 		delete(m.topologyPairToPods[pair], deletedPod)
 		if len(m.topologyPairToPods[pair]) == 0 {
@@ -593,16 +627,14 @@ func (c *evenPodsSpreadMetadata) updatePod(updatedPod, preemptorPod *v1.Pod, nod
 	if updatedPod.Namespace != preemptorPod.Namespace || node == nil {
 		return nil
 	}
-	constraints := getHardTopologySpreadConstraints(preemptorPod)
+	constraints := filterHardTopologySpreadConstraints(preemptorPod)
 	if !NodeLabelsMatchSpreadConstraints(node.Labels, constraints) {
 		return nil
 	}
 
 	podLabelSet := labels.Set(updatedPod.Labels)
 	for _, constraint := range constraints {
-		if match, err := PodMatchesSpreadConstraint(podLabelSet, constraint); err != nil {
-			return err
-		} else if !match {
+		if !constraint.selector.Matches(podLabelSet) {
 			continue
 		}
 
@@ -637,8 +669,8 @@ func (c *evenPodsSpreadMetadata) clone() *evenPodsSpreadMetadata {
 // RemovePod changes predicateMetadata assuming that the given `deletedPod` is
 // deleted from the system.
 func (meta *predicateMetadata) RemovePod(deletedPod *v1.Pod, node *v1.Node) error {
-	deletedPodFullName := schedutil.GetPodFullName(deletedPod)
-	if deletedPodFullName == schedutil.GetPodFullName(meta.pod) {
+	deletedPodFullName := util.GetPodFullName(deletedPod)
+	if deletedPodFullName == util.GetPodFullName(meta.pod) {
 		return fmt.Errorf("deletedPod and meta.pod must not be the same")
 	}
 	meta.podAffinityMetadata.removePod(deletedPod)
@@ -654,8 +686,8 @@ func (meta *predicateMetadata) RemovePod(deletedPod *v1.Pod, node *v1.Node) erro
 // AddPod changes predicateMetadata assuming that the given `addedPod` is added to the
 // system.
 func (meta *predicateMetadata) AddPod(addedPod *v1.Pod, node *v1.Node) error {
-	addedPodFullName := schedutil.GetPodFullName(addedPod)
-	if addedPodFullName == schedutil.GetPodFullName(meta.pod) {
+	addedPodFullName := util.GetPodFullName(addedPod)
+	if addedPodFullName == util.GetPodFullName(meta.pod) {
 		return fmt.Errorf("addedPod and meta.pod must not be the same")
 	}
 	if node == nil {
@@ -744,7 +776,7 @@ func podMatchesAnyAffinityTermProperties(pod *v1.Pod, properties []*affinityTerm
 // (1) Whether it has PodAntiAffinity
 // (2) Whether any AffinityTerm matches the incoming pod
 func getTPMapMatchingExistingAntiAffinity(pod *v1.Pod, allNodes []*schedulernodeinfo.NodeInfo) (*topologyPairsMaps, error) {
-	errCh := schedutil.NewErrorChannel()
+	errCh := util.NewErrorChannel()
 	var lock sync.Mutex
 	topologyMaps := newTopologyPairsMaps()
 
@@ -793,7 +825,7 @@ func getTPMapMatchingIncomingAffinityAntiAffinity(pod *v1.Pod, allNodes []*sched
 		return newTopologyPairsMaps(), newTopologyPairsMaps(), nil
 	}
 
-	errCh := schedutil.NewErrorChannel()
+	errCh := util.NewErrorChannel()
 	var lock sync.Mutex
 	topologyPairsAffinityPodsMaps = newTopologyPairsMaps()
 	topologyPairsAntiAffinityPodsMaps = newTopologyPairsMaps()

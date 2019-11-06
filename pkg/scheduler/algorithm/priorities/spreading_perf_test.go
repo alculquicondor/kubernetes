@@ -24,6 +24,7 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/listers/fake"
 	nodeinfosnapshot "k8s.io/kubernetes/pkg/scheduler/nodeinfo/snapshot"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
+	"k8s.io/kubernetes/pkg/scheduler/util"
 )
 
 // The tests in this file compare the performance of SelectorSpreadPriority
@@ -96,7 +97,7 @@ func BenchmarkTestSelectorSpreadPriority(b *testing.B) {
 
 			for i := 0; i < b.N; i++ {
 				meta := &priorityMetadata{
-					podSelector: getSelector(pod, ss.serviceLister, ss.controllerLister, ss.replicaSetLister, ss.statefulSetLister),
+					podSelector: util.GetSelector(pod, ss.serviceLister, ss.controllerLister, ss.replicaSetLister, ss.statefulSetLister),
 				}
 				_, err := runMapReducePriority(ss.CalculateSpreadPriorityMap, ss.CalculateSpreadPriorityReduce, meta, pod, snapshot, filteredNodes)
 				if err != nil {

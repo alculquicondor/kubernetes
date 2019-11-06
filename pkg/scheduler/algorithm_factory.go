@@ -59,6 +59,7 @@ type PluginFactoryArgs struct {
 	StorageClassLister             storagelisters.StorageClassLister
 	VolumeBinder                   *volumebinder.VolumeBinder
 	HardPodAffinitySymmetricWeight int32
+	TopologySpreadConstraints      []v1.TopologySpreadConstraint
 }
 
 // PriorityMetadataProducerFactory produces MetadataProducer from the given args.

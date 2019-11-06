@@ -405,7 +405,9 @@ func TestServiceAffinityScore(t *testing.T) {
 				fakelisters.ControllerLister(rcs),
 				fakelisters.ReplicaSetLister(rss),
 				fakelisters.StatefulSetLister(sss),
-				1)
+				1,
+				nil,
+			)
 			metaData := metaDataProducer(test.pod, nodes, snapshot)
 			state := framework.NewCycleState()
 			state.Write(migration.PrioritiesStateKey, &migration.PrioritiesStateData{Reference: metaData})

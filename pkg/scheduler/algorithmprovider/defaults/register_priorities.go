@@ -26,7 +26,14 @@ func init() {
 	// Register functions that extract metadata used by priorities computations.
 	scheduler.RegisterPriorityMetadataProducerFactory(
 		func(args scheduler.PluginFactoryArgs) priorities.MetadataProducer {
-			return priorities.NewMetadataFactory(args.ServiceLister, args.ControllerLister, args.ReplicaSetLister, args.StatefulSetLister, args.HardPodAffinitySymmetricWeight)
+			return priorities.NewMetadataFactory(
+				args.ServiceLister,
+				args.ControllerLister,
+				args.ReplicaSetLister,
+				args.StatefulSetLister,
+				args.HardPodAffinitySymmetricWeight,
+				args.TopologySpreadConstraints,
+			)
 		})
 
 	// ServiceSpreadingPriority is a priority config factory that spreads pods by minimizing

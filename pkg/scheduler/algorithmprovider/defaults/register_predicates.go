@@ -25,7 +25,9 @@ func init() {
 	// Register functions that extract metadata used by predicates computations.
 	scheduler.RegisterPredicateMetadataProducerFactory(
 		func(args scheduler.PluginFactoryArgs) predicates.MetadataProducer {
-			f := &predicates.MetadataProducerFactory{}
+			f := &predicates.MetadataProducerFactory{
+				TopologySpreadConstraints: args.TopologySpreadConstraints,
+			}
 			return f.GetPredicateMetadata
 		})
 

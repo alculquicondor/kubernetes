@@ -129,6 +129,7 @@ func (sched *Scheduler) Cache() internalcache.Cache {
 type schedulerOptions struct {
 	schedulerName                  string
 	hardPodAffinitySymmetricWeight int32
+	topologySpreadConstraints      []v1.TopologySpreadConstraint
 	disablePreemption              bool
 	percentageOfNodesToScore       int32
 	bindTimeoutSeconds             int64
@@ -157,6 +158,13 @@ func WithName(schedulerName string) Option {
 func WithHardPodAffinitySymmetricWeight(hardPodAffinitySymmetricWeight int32) Option {
 	return func(o *schedulerOptions) {
 		o.hardPodAffinitySymmetricWeight = hardPodAffinitySymmetricWeight
+	}
+}
+
+// WithTopologySpreadConstraints sets topologySpreadConstraints for Scheduler.
+func WithTopologySpreadConstraints(constraints []v1.TopologySpreadConstraint) Option {
+	return func(o *schedulerOptions) {
+		o.topologySpreadConstraints = constraints
 	}
 }
 
@@ -311,6 +319,7 @@ func New(client clientset.Interface,
 		VolumeBinder:                   volumeBinder,
 		SchedulerCache:                 schedulerCache,
 		HardPodAffinitySymmetricWeight: options.hardPodAffinitySymmetricWeight,
+		TopologySpreadConstraints:      options.topologySpreadConstraints,
 		DisablePreemption:              options.disablePreemption,
 		PercentageOfNodesToScore:       options.percentageOfNodesToScore,
 		BindTimeoutSeconds:             options.bindTimeoutSeconds,

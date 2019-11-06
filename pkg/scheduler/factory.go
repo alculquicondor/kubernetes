@@ -199,6 +199,7 @@ type ConfigFactoryArgs struct {
 	VolumeBinder                   *volumebinder.VolumeBinder
 	SchedulerCache                 internalcache.Cache
 	HardPodAffinitySymmetricWeight int32
+	TopologySpreadConstraints      []v1.TopologySpreadConstraint
 	DisablePreemption              bool
 	PercentageOfNodesToScore       int32
 	BindTimeoutSeconds             int64
@@ -279,6 +280,7 @@ func NewConfigFactory(args *ConfigFactoryArgs) *Configurator {
 		StorageClassLister:             c.storageClassLister,
 		VolumeBinder:                   c.volumeBinder,
 		HardPodAffinitySymmetricWeight: c.hardPodAffinitySymmetricWeight,
+		TopologySpreadConstraints:      args.TopologySpreadConstraints,
 	}
 	c.configProducerArgs = &plugins.ConfigProducerArgs{}
 

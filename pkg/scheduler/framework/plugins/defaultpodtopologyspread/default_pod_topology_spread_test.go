@@ -358,6 +358,7 @@ func TestDefaultPodTopologySpreadScore(t *testing.T) {
 				fakelisters.ReplicaSetLister(test.rss),
 				fakelisters.StatefulSetLister(test.sss),
 				1,
+				nil,
 			)
 			metaData := metaDataProducer(test.pod, nodes, snapshot)
 
@@ -616,6 +617,7 @@ func TestZoneSelectorSpreadPriority(t *testing.T) {
 				fakelisters.ReplicaSetLister(test.rss),
 				fakelisters.StatefulSetLister(test.sss),
 				1,
+				nil,
 			)
 			metaData := metaDataProducer(test.pod, nodes, snapshot)
 

@@ -199,6 +199,7 @@ func TestImageLocalityPriority(t *testing.T) {
 				informerFactory.Apps().V1().ReplicaSets().Lister(),
 				informerFactory.Apps().V1().StatefulSets().Lister(),
 				1,
+				nil,
 			)
 
 			snapshot := nodeinfosnapshot.NewSnapshot(nil, test.nodes)

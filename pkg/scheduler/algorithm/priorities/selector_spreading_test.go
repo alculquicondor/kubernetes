@@ -353,6 +353,7 @@ func TestSelectorSpreadPriority(t *testing.T) {
 				fakelisters.ReplicaSetLister(test.rss),
 				fakelisters.StatefulSetLister(test.sss),
 				1,
+				nil,
 			)
 			metaData := metaDataProducer(test.pod, nodes, snapshot)
 
@@ -591,6 +592,7 @@ func TestZoneSelectorSpreadPriority(t *testing.T) {
 				fakelisters.ReplicaSetLister(test.rss),
 				fakelisters.StatefulSetLister(test.sss),
 				1,
+				nil,
 			)
 			metaData := metaDataProducer(test.pod, nodes, snapshot)
 			list, err := runMapReducePriority(selectorSpread.CalculateSpreadPriorityMap, selectorSpread.CalculateSpreadPriorityReduce, metaData, test.pod, snapshot, makeLabeledNodeList(labeledNodes))
@@ -780,6 +782,7 @@ func TestZoneSpreadPriority(t *testing.T) {
 				fakelisters.ReplicaSetLister(rss),
 				fakelisters.StatefulSetLister(sss),
 				1,
+				nil,
 			)
 			metaData := metaDataProducer(test.pod, nodes, snapshot)
 			list, err := runMapReducePriority(zoneSpread.CalculateAntiAffinityPriorityMap, zoneSpread.CalculateAntiAffinityPriorityReduce, metaData, test.pod, snapshot, makeLabeledNodeList(test.nodes))
