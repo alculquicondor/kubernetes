@@ -135,6 +135,14 @@ try {
   Configure-Crictl
   Setup-ContainerRuntime
   DownloadAndInstall-AuthPlugin
+
+  # Even if Stackdriver is already installed, the function will still [re]start the service.
+  if (IsLoggingEnabled $kube_env) {
+    Install-LoggingAgent
+    Configure-LoggingAgent
+    Restart-LoggingAgent
+  }
+
   DownloadAndInstall-KubernetesBinaries
   Create-NodePki
   Create-KubeletKubeconfig
@@ -146,12 +154,6 @@ try {
   Configure-GcePdTools
   Configure-Kubelet
 
-  # Even if Stackdriver is already installed, the function will still [re]start the service.
-  if (IsLoggingEnabled $kube_env) {
-    Install-LoggingAgent
-    Configure-LoggingAgent
-    Restart-LoggingAgent
-  }
   Start-WorkerServices
   Log-Output 'Waiting 15 seconds for node to join cluster.'
   Start-Sleep 15
