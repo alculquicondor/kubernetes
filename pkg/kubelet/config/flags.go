@@ -40,11 +40,6 @@ type ContainerRuntimeOptions struct {
 	// but less secure because the connection between apiserver and container runtime is not
 	// authenticated.
 	RedirectContainerStreaming bool
-	// GVisorNodeMode enables gvisor node mode. In this mode, kubelet rejects exec/attach to
-	// non-gvisor pods.
-	// TODO(b/113282521): Remove this mode and allow exec/attach into non-gvisor pods after
-	// XEMU is open sourced.
-	GVisorNodeMode bool
 
 	// Docker-specific options.
 
