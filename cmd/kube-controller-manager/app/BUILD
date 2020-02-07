@@ -88,7 +88,6 @@ go_library(
         "//pkg/util/configz:go_default_library",
         "//pkg/util/flag:go_default_library",
         "//pkg/volume:go_default_library",
-        "//pkg/volume/awsebs:go_default_library",
         "//pkg/volume/azure_dd:go_default_library",
         "//pkg/volume/azure_file:go_default_library",
         "//pkg/volume/cinder:go_default_library",
