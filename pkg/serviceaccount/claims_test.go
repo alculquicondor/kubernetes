@@ -59,11 +59,12 @@ func TestClaims(t *testing.T) {
 	}
 	cs := []struct {
 		// input
-		sa  core.ServiceAccount
-		pod *core.Pod
-		sec *core.Secret
-		exp int64
-		aud []string
+		sa        core.ServiceAccount
+		pod       *core.Pod
+		sec       *core.Secret
+		exp       int64
+		warnafter int64
+		aud       []string
 		// desired
 		sc *jwt.Claims
 		pc *privateClaims
@@ -158,6 +159,31 @@ func TestClaims(t *testing.T) {
 				},
 			},
 		},
+		{
+			// warn after provided
+			sa:        sa,
+			pod:       pod,
+			sec:       sec,
+			exp:       60 * 60 * 24,
+			warnafter: 60 * 60,
+			// nil audience
+			aud: nil,
+
+			sc: &jwt.Claims{
+				Subject:   "system:serviceaccount:myns:mysvcacct",
+				IssuedAt:  jwt.NumericDate(1514764800),
+				NotBefore: jwt.NumericDate(1514764800),
+				Expiry:    jwt.NumericDate(1514764800 + 60*60*24),
+			},
+			pc: &privateClaims{
+				Kubernetes: kubernetes{
+					Namespace: "myns",
+					Svcacct:   ref{Name: "mysvcacct", UID: "mysvcacct-uid"},
+					Pod:       &ref{Name: "mypod", UID: "mypod-uid"},
+					WarnAfter: jwt.NumericDate(1514764800 + 60*60),
+				},
+			},
+		},
 	}
 	for i, c := range cs {
 		t.Run(fmt.Sprintf("case %d", i), func(t *testing.T) {
@@ -172,7 +198,7 @@ func TestClaims(t *testing.T) {
 				return string(b)
 			}
 
-			sc, pc := Claims(c.sa, c.pod, c.sec, c.exp, c.aud)
+			sc, pc := Claims(c.sa, c.pod, c.sec, c.exp, c.warnafter, c.aud)
 			if spew(sc) != spew(c.sc) {
 				t.Errorf("standard claims differed\n\tsaw:\t%s\n\twant:\t%s", spew(sc), spew(c.sc))
 			}
