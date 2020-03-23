@@ -146,8 +146,28 @@ function create-static-auth-kubeconfig-for-component {
   echo -n ${token} > /etc/srv/kubernetes/${component}/token
 }
 
+# Disabling docker service
+#
+# This function expects no arguments.
+#
+# This function
+#   - Stops docker service.
+#   - Removes ip link created by docker service.
+#   - Disables docker service, to prevent from auto-starting on VM restart.
+function disable-docker-service {
+  if  systemctl is-active --quiet docker; then
+    echo "Stopping docker service"
+    sudo systemctl stop docker
+    echo "Disabling docker service"
+    sudo systemctl disable docker
+    echo "Deleting docker0 ip link"
+    sudo ip link del docker0
+  fi
+}
+
 function gke-internal-master-start {
   echo "Internal GKE configuration start"
+  disable-docker-service
   compute-master-manifest-variables
   start_internal_cluster_autoscaler
   start_pod_autoscaler
