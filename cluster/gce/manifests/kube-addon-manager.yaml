@@ -8,6 +8,9 @@ metadata:
   labels:
     component: kube-addon-manager
 spec:
+  securityContext:
+    runAsUser: {{runAsUser}}
+    runAsGroup: {{runAsGroup}}
   priorityClassName: system-node-critical
   priority: 2000001000
   hostNetwork: true
