@@ -23,6 +23,14 @@
 "containers":[
     {
     "name": "kube-scheduler",
+    "securityContext": {
+      "allowPrivilegeEscalation": false,
+      "capabilities": {
+        "drop": [
+          "all"
+        ]
+      }
+    },
     "image": "{{pillar['kube_docker_registry']}}/kube-scheduler-amd64:{{pillar['kube-scheduler_docker_tag']}}",
     "resources": {
       "requests": {
