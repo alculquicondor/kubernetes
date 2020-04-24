@@ -1933,7 +1933,7 @@ function start-kube-controller-manager {
 function start-kube-scheduler {
   echo "Start kubernetes scheduler"
   create-kubeconfig "kube-scheduler" ${KUBE_SCHEDULER_TOKEN}
-  prepare-log-file /var/log/kube-scheduler.log ${KUBE_SCHEDULER_RUNASUSER} ${KUBE_SCHEDULER_RUNASGROUP}
+  prepare-log-file /var/log/kube-scheduler.log ${KUBE_SCHEDULER_RUNASUSER:-2001} ${KUBE_SCHEDULER_RUNASGROUP:-2001}
   # Calculate variables and set them in the manifest.
   params="${SCHEDULER_TEST_LOG_LEVEL:-"--v=2"} ${SCHEDULER_TEST_ARGS:-}"
   params+=" --kubeconfig=/etc/srv/kubernetes/kube-scheduler/kubeconfig"
@@ -1957,8 +1957,8 @@ function start-kube-scheduler {
   sed -i -e "s@{{pillar\['kube_docker_registry'\]}}@${DOCKER_REGISTRY}@g" "${src_file}"
   sed -i -e "s@{{pillar\['kube-scheduler_docker_tag'\]}}@${kube_scheduler_docker_tag}@g" "${src_file}"
   sed -i -e "s@{{cpurequest}}@${KUBE_SCHEDULER_CPU_REQUEST}@g" "${src_file}"
-  sed -i -e "s@{{runAsUser}}@${KUBE_SCHEDULER_RUNASUSER}@g" "${src_file}"
-  sed -i -e "s@{{runAsGroup}}@${KUBE_SCHEDULER_RUNASGROUP}@g" "${src_file}"
+  sed -i -e "s@{{runAsUser}}@${KUBE_SCHEDULER_RUNASUSER:-2001}@g" "${src_file}"
+  sed -i -e "s@{{runAsGroup}}@${KUBE_SCHEDULER_RUNASGROUP:-2001}@g" "${src_file}"
   cp "${src_file}" /etc/kubernetes/manifests
 }
 
@@ -2369,7 +2369,7 @@ function start-kube-addons {
   local -r dst_dir="/etc/kubernetes/addons"
 
   create-kubeconfig "addon-manager" ${ADDON_MANAGER_TOKEN}
-  prepare-log-file /var/log/kube-addon-manager.log ${KUBE_ADDON_MANAGER_RUNASUSER} ${KUBE_ADDON_MANAGER_RUNASGROUP}
+  prepare-log-file /var/log/kube-addon-manager.log ${KUBE_ADDON_MANAGER_RUNASUSER:-2002} ${KUBE_ADDON_MANAGER_RUNASGROUP:-2002}
   # prep addition kube-up specific rbac objects
   setup-addon-manifests "addons" "rbac/kubelet-api-auth"
   setup-addon-manifests "addons" "rbac/kubelet-cert-rotation"
@@ -2549,8 +2549,8 @@ EOF
   # Place addon manager pod manifest.
   src_file="${src_dir}/kube-addon-manager.yaml"
   sed -i -e "s@{{kubectl_extra_prune_whitelist}}@${ADDON_MANAGER_PRUNE_WHITELIST:-}@g" "${src_file}"
-  sed -i -e "s@{{runAsUser}}@${KUBE_ADDON_MANAGER_RUNASUSER}@g" "${src_file}"
-  sed -i -e "s@{{runAsGroup}}@${KUBE_ADDON_MANAGER_RUNASGROUP}@g" "${src_file}"
+  sed -i -e "s@{{runAsUser}}@${KUBE_ADDON_MANAGER_RUNASUSER:-2002}@g" "${src_file}"
+  sed -i -e "s@{{runAsGroup}}@${KUBE_ADDON_MANAGER_RUNASGROUP:-2002}@g" "${src_file}"
   cp "${src_file}" /etc/kubernetes/manifests
 }
 
