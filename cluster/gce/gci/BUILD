@@ -54,7 +54,8 @@ pkg_tar(
             "gke-internal-configure.sh",
             "gke-internal-configure-helper.sh",
             "sysctl/*",
-        ]),
+        ],
+    ),
     files = {
         "//cluster/gce/gci/mounter": "gci-mounter",
         "configure-helper.sh": "gci-configure-helper.sh",
