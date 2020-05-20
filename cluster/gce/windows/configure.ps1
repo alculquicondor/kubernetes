@@ -153,6 +153,8 @@ try {
   Configure-HostDnsConf
   Configure-GcePdTools
   Configure-Kubelet
+  DownloadAndInstall-GKEMetadataServer
+  Start-GKEMetadataServer
 
   Start-WorkerServices
   Log-Output 'Waiting 15 seconds for node to join cluster.'
