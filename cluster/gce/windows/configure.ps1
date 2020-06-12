@@ -156,6 +156,9 @@ try {
   DownloadAndInstall-GKEMetadataServer
   Start-GKEMetadataServer
 
+  # Flush cache to disk before starting kubelet & kube-proxy services
+  # to make metadata server route and stackdriver service more persistent.
+  Write-Volumecache C -PassThru
   Start-WorkerServices
   Log-Output 'Waiting 15 seconds for node to join cluster.'
   Start-Sleep 15
@@ -166,6 +169,8 @@ try {
   Schedule-LogRotation -Pattern '.*\.log$' -Path ${env:LOGS_DIR} -RepetitionInterval $(New-Timespan -Hour 1) -Config $config
 
   Pull-InfraContainer
+  # Flush cache to disk to persist the setup status
+  Write-Volumecache C -PassThru
 }
 catch {
   Write-Host 'Exception caught in script:'
