@@ -126,9 +126,9 @@ function validate-hash {
   local -r file="$1"
   local -r expected="$2"
 
-  actual=$(shasum -a512 ${file} | awk '{ print $1 }') || true
+  actual=$(sha512sum ${file} | awk '{ print $1 }') || true
   if [[ "${actual}" != "${expected}" ]]; then
-    echo "== ${file} corrupted, sha1 ${actual} doesn't match expected ${expected} =="
+    echo "== ${file} corrupted, sha512 ${actual} doesn't match expected ${expected} =="
     return 1
   fi
 }
