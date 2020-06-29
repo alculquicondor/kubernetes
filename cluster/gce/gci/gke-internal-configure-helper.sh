@@ -261,6 +261,16 @@ function gke-setup-containerd {
   local -r CONTAINERD_HOME="/home/containerd"
   mkdir -p "${CONTAINERD_HOME}"
 
+  # Use the extra containerd if asked to, mainly for Riptide.
+  if [[ "${EXTRA_CONTAINERD_ENABLE:-}" == "true" ]]; then
+    sudo mount -o ro,bind $EXTRA_CONTAINERD_HOME/bin/containerd /usr/bin/containerd
+    sudo mount -o ro,bind $EXTRA_CONTAINERD_HOME/bin/containerd-shim /usr/bin/containerd-shim
+    sudo mount -o ro,bind $EXTRA_CONTAINERD_HOME/bin/containerd-shim-runc-v1 /usr/bin/containerd-shim-runc-v1
+    sudo mount -o ro,bind $EXTRA_CONTAINERD_HOME/bin/containerd-shim-runc-v2 /usr/bin/containerd-shim-runc-v2
+    sudo mount -o ro,bind $EXTRA_CONTAINERD_HOME/bin/containerd-stress /usr/bin/containerd-stress
+    sudo mount -o ro,bind $EXTRA_CONTAINERD_HOME/bin/ctr /usr/bin/ctr
+  fi
+
   echo "Generating containerd config"
   local -r config_path="${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}"
   mkdir -p "$(dirname "${config_path}")"
