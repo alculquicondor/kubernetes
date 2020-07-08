@@ -554,6 +554,13 @@ function create-master-pki {
     APISERVER_SERVER_KEY="${MASTER_KEY}"
   fi
 
+  if [[ ! -z "${OLD_MASTER_CERT:-}" && ! -z "${OLD_MASTER_KEY:-}" ]]; then
+    OLD_MASTER_CERT_PATH="${pki_dir}/oldapiserver.crt"
+    echo "${OLD_MASTER_CERT}" | base64 --decode > "${OLD_MASTER_CERT_PATH}"
+    OLD_MASTER_KEY_PATH="${pki_dir}/oldapiserver.key"
+    echo "${OLD_MASTER_KEY}" | base64 --decode > "${OLD_MASTER_KEY_PATH}"
+  fi
+
   APISERVER_SERVER_CERT_PATH="${pki_dir}/apiserver.crt"
   write-pki-data "${APISERVER_SERVER_CERT}" "${APISERVER_SERVER_CERT_PATH}"
 
