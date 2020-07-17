@@ -2598,7 +2598,7 @@ EOF
   if echo "${ADMISSION_CONTROL:-}" | grep -q "LimitRanger"; then
     setup-addon-manifests "admission-controls" "limit-range" "gce"
   fi
-  setup-addon-manifests "admission-controls" "resource-quota-critical-pods"
+  setup-addon-manifests "addons" "admission-resource-quota-critical-pods"
   if [[ "${NETWORK_POLICY_PROVIDER:-}" == "calico" ]]; then
     setup-addon-manifests "addons" "calico-policy-controller"
 
