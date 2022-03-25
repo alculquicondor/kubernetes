@@ -740,6 +740,13 @@ func TestSuspendJobControllerRestart(t *testing.T) {
 	}, true)
 }
 
+func TestDummy(t *testing.T) {
+	controlPlaneConfig := framework.NewIntegrationTestControlPlaneConfig()
+	_, _, apiServerCloseFn := framework.RunAnAPIServer(controlPlaneConfig)
+
+	defer apiServerCloseFn()
+}
+
 func TestNodeSelectorUpdate(t *testing.T) {
 	for name, featureGate := range map[string]bool{
 		"feature gate disabled": false,
