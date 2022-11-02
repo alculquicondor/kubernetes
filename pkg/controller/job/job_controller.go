@@ -86,8 +86,9 @@ var (
 // Controller ensures that all Job objects have corresponding pods to
 // run their configured workload.
 type Controller struct {
-	kubeClient clientset.Interface
-	podControl controller.PodControlInterface
+	kubeClient   clientset.Interface
+	eventsClient clientset.Interface
+	podControl   controller.PodControlInterface
 
 	// To allow injection of the following for testing.
 	updateStatusHandler func(ctx context.Context, job *batch.Job) (*batch.Job, error)
@@ -127,11 +128,15 @@ type Controller struct {
 
 // NewController creates a new Job controller that keeps the relevant pods
 // in sync with their corresponding Job objects.
-func NewController(podInformer coreinformers.PodInformer, jobInformer batchinformers.JobInformer, kubeClient clientset.Interface) *Controller {
+func NewController(podInformer coreinformers.PodInformer, jobInformer batchinformers.JobInformer, kubeClient, eventsClient clientset.Interface) *Controller {
 	eventBroadcaster := record.NewBroadcaster()
+	if eventsClient == nil {
+		eventsClient = kubeClient
+	}
 
 	jm := &Controller{
-		kubeClient: kubeClient,
+		kubeClient:   kubeClient,
+		eventsClient: eventsClient,
 		podControl: controller.RealPodControl{
 			KubeClient: kubeClient,
 			Recorder:   eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "job-controller"}),
@@ -182,7 +187,7 @@ func (jm *Controller) Run(ctx context.Context, workers int) {
 
 	// Start events processing pipeline.
 	jm.broadcaster.StartStructuredLogging(0)
-	jm.broadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: jm.kubeClient.CoreV1().Events("")})
+	jm.broadcaster.StartRecordingToSink(&v1core.EventSinkImpl{Interface: jm.eventsClient.CoreV1().Events("")})
 	defer jm.broadcaster.Shutdown()
 
 	defer jm.queue.ShutDown()

@@ -33,6 +33,7 @@ func startJobController(ctx context.Context, controllerContext ControllerContext
 		controllerContext.InformerFactory.Core().V1().Pods(),
 		controllerContext.InformerFactory.Batch().V1().Jobs(),
 		controllerContext.ClientBuilder.ClientOrDie("job-controller"),
+		controllerContext.ClientBuilder.ClientOrDie("job-controller-events"),
 	).Run(ctx, int(controllerContext.ComponentConfig.JobController.ConcurrentJobSyncs))
 	return nil, true, nil
 }
